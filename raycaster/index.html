@@ -11,29 +11,27 @@
 
       var CIRCLE = Math.PI * 2;
       var MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry/i.test(navigator.userAgent)
+      var PAUSE = 'PAUSE';
+      var PLAY = 'PLAY'
 
       function Controls() {
-        this.codes  = { 37: 'left', 39: 'right', 38: 'forward', 40: 'backward' };
-        this.states = { 'left': false, 'right': false, 'forward': false, 'backward': false };
+        this.codes  = { 38: 'forward', 40: 'backward' };
+        this.states = { 'lookX': 0, 'forward': false, 'backward': false };
         document.addEventListener('keydown', this.onKey.bind(this, true), false);
         document.addEventListener('keyup', this.onKey.bind(this, false), false);
-        document.addEventListener('touchstart', this.onTouch.bind(this), false);
-        document.addEventListener('touchmove', this.onTouch.bind(this), false);
-        document.addEventListener('touchend', this.onTouchEnd.bind(this), false);
+        document.addEventListener('mousemove', this.onMouse.bind(this), false);
       }
 
-      Controls.prototype.onTouch = function(e) {
-        var t = e.touches[0];
-        this.onTouchEnd(e);
-        if (t.pageY < window.innerHeight * 0.5) this.onKey(true, { keyCode: 38 });
-        else if (t.pageX < window.innerWidth * 0.5) this.onKey(true, { keyCode: 37 });
-        else if (t.pageY > window.innerWidth * 0.5) this.onKey(true, { keyCode: 39 });
-      };
-
-      Controls.prototype.onTouchEnd = function(e) {
-        this.states = { 'left': false, 'right': false, 'forward': false, 'backward': false };
-        e.preventDefault();
-        e.stopPropagation();
+      Controls.prototype.onMouse = function(e) {
+        if ( game.state === PLAY ) {
+          const deadzone = 5;
+          const lookSensitivity = 50;
+          if (e.movementX > deadzone || e.movementX < -deadzone) {
+            this.states.lookX += e.movementX / lookSensitivity;
+          } 
+          e.preventDefault && e.preventDefault();
+          e.stopPropagation && e.stopPropagation();
+        }
       };
 
       Controls.prototype.onKey = function(val, e) {
@@ -71,11 +69,22 @@
         this.paces += distance;
       };
 
-      Player.prototype.update = function(controls, map, seconds) {
-        if (controls.left) this.rotate(-Math.PI * seconds);
-        if (controls.right) this.rotate(Math.PI * seconds);
-        if (controls.forward) this.walk(3 * seconds, map);
-        if (controls.backward) this.walk(-3 * seconds, map);
+      Player.prototype.strafe = function(distance, map) {
+        var dx = Math.cos(this.direction) * distance;
+        var dy = Math.sin(this.direction) * distance;
+        if (map.get(this.x + dx, this.y) <= 0) this.x += dx;
+        if (map.get(this.x, this.y + dy) <= 0) this.y += dy;
+        this.paces += distance;
+      };
+
+      Player.prototype.update = function(controlStates, map, seconds) {
+        //console.log('controls', controls)
+        if (controlStates.lookX) {
+          this.rotate(Math.PI * seconds * controlStates.lookX);
+          controlStates.lookX = 0;
+        }
+        if (controlStates.forward) this.walk(3 * seconds, map);
+        if (controlStates.backward) this.walk(-3 * seconds, map);
       };
 
       function Map(size) {
@@ -266,8 +275,31 @@
       var controls = new Controls();
       var camera = new Camera(display, MOBILE ? 160 : 320, 0.8);
       var loop = new GameLoop();
+      var game = {
+        state: PAUSE, 
+      }
 
       map.randomize();
+      
+      // pointer lock
+      function lockChangeAlert() {
+        if (document.pointerLockElement === display || document.mozPointerLockElement === display || document.webkitPointerLockElement === display ) {
+          console.log('The pointer lock status is now locked');
+          game.state = PLAY;
+        } else {
+          console.log('The pointer lock status is now unlocked');
+          game.state = PAUSE;
+        }
+      }
+      document.addEventListener('pointerlockchange', lockChangeAlert, false);
+      document.addEventListener('mozpointerlockchange', lockChangeAlert, false);
+      document.addEventListener('webkitpointerlockchange', lockChangeAlert, false);
+      display.requestPointerLock = display.requestPointerLock || display.mozRequestPointerLock || display.webkitRequestPointerLock;
+
+      display.onclick = function () {
+        console.log('requesting pointer lock');
+        display.requestPointerLock();
+      }
       
       loop.start(function frame(seconds) {
         map.update(seconds);
@@ -276,14 +308,6 @@
       });
 
     </script>
-    <script>
-      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
 
-      ga('create', 'UA-50885475-1', 'playfuljs.com');
-      ga('send', 'pageview');
-    </script>
   </body>
 </html>
