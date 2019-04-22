@@ -12,26 +12,46 @@
       var CIRCLE = Math.PI * 2;
       var MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry/i.test(navigator.userAgent)
       var PAUSE = 'PAUSE';
-      var PLAY = 'PLAY'
+      var PLAY = 'PLAY';
 
       function Controls() {
         this.codes  = { 38: 'forward', 87: 'forward', 40: 'backward', 83: 'backward' };
-        this.states = { 'lookX': 0, 'forward': false, 'backward': false };
+        this.states = { 'lookX': 0, 'forward': false, 'backward': false, 'fire': false };
         document.addEventListener('keydown', this.onKey.bind(this, true), false);
         document.addEventListener('keyup', this.onKey.bind(this, false), false);
         document.addEventListener('mousemove', this.onMouse.bind(this), false);
+        document.addEventListener('mousedown', this.onMouse.bind(this), false);
+        document.addEventListener('mouseup', this.onMouse.bind(this), false);
       }
 
       Controls.prototype.onMouse = function(e) {
         if ( game.state === PLAY ) {
-          const deadzone = 5;
-          const lookSensitivity = 50;
-          if (e.movementX > deadzone || e.movementX < -deadzone) {
-            this.states.lookX += e.movementX / lookSensitivity;
-          } 
-          e.preventDefault && e.preventDefault();
-          e.stopPropagation && e.stopPropagation();
+          switch (e.type) {
+            case 'mousemove':
+              const deadzone = 5;
+              const lookSensitivity = 50;
+              if (e.movementX > deadzone || e.movementX < -deadzone) {
+                this.states.lookX += e.movementX / lookSensitivity;
+              }
+              break;
+            case 'mousedown':
+              console.log(e);
+              // this needs to updates state so that camera can update in the same way player does
+              this.states.fire = true;
+              break;
+            case 'mouseup':
+              console.log(e);
+              // this needs to updates state so that camera can update in the same way player does
+              this.states.fire = false;
+              break;
+            defalt:
+              break;
+          }
+          
         }
+        // other
+        e.preventDefault && e.preventDefault();
+        e.stopPropagation && e.stopPropagation();
       };
 
       Controls.prototype.onKey = function(val, e) {
@@ -55,6 +75,7 @@
         this.direction = direction;
         this.weapon = new Bitmap('assets/knife_hand.png', 319, 320);
         this.paces = 0;
+        this.firing = false;
       }
 
       Player.prototype.rotate = function(angle) {
@@ -85,6 +106,8 @@
         }
         if (controlStates.forward) this.walk(3 * seconds, map);
         if (controlStates.backward) this.walk(-3 * seconds, map);
+        // 
+        this.firing = controlStates.fire;
       };
 
       function Map(size) {
@@ -156,6 +179,7 @@
       };
 
       function Camera(canvas, resolution, focalLength) {
+        this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
         this.width = canvas.width = window.innerWidth * 0.5;
         this.height = canvas.height = window.innerHeight * 0.5;
@@ -165,12 +189,14 @@
         this.range = MOBILE ? 8 : 14;
         this.lightRange = 5;
         this.scale = (this.width + this.height) / 1200;
+        this.shake = 0;
       }
 
       Camera.prototype.render = function(player, map) {
         this.drawSky(player.direction, map.skybox, map.light);
         this.drawColumns(player, map);
         // this.drawWeapon(player.weapon, player.paces);
+        this.applyShake(player);
       };
 
       Camera.prototype.drawSky = function(direction, sky, ambient) {
@@ -208,6 +234,35 @@
         var top = this.height * 0.6 + bobY;
         this.ctx.drawImage(weapon.image, left, top, weapon.width * this.scale, weapon.height * this.scale);
       };
+      
+      Camera.prototype.applyShake = function(player) {
+        //
+        let weaponKick = 10;
+        let maxKick = 100;
+        if (player.firing && this.shake < maxKick){
+          this.shake += 10;
+        }
+        //
+        const randomInt = function (min, max) {
+          return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+        let magnitude = this.shake;
+        let startX = 0,
+          startY = 0;
+        if (magnitude > 0) {
+          this.canvas.style.transform ='translate(' + startX + 'px, ' + startY + 'px)';
+          // magnitude -= magnitudeUnit;
+          let randomX = randomInt(-magnitude, magnitude);
+          let randomY = randomInt(-magnitude, magnitude);
+          // move it
+          this.canvas.style.transform ='translate(' + randomX + 'px, ' + randomY + 'px)';
+          this.shake -= 5;
+        }
+        // reset canvas
+        if (this.shake === 0) {
+          this.canvas.style.transform = 'translate(' + startX + ', ' + startY + ')';
+        }
+      }
 
       Camera.prototype.drawColumn = function(column, ray, angle, map) {
         var ctx = this.ctx;
@@ -297,8 +352,18 @@
       display.requestPointerLock = display.requestPointerLock || display.mozRequestPointerLock || display.webkitRequestPointerLock;
 
       display.onclick = function () {
-        console.log('requesting pointer lock');
-        display.requestPointerLock();
+        switch (game.state) {
+          case PAUSE: 
+            console.log('requesting pointer lock');
+            display.requestPointerLock();
+            break;
+          case PLAY:
+            //camera.addShake(10);
+            break;
+          default:
+          break;
+        }
+        
       }
       
       loop.start(function frame(seconds) {
