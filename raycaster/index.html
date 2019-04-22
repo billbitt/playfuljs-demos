@@ -170,7 +170,7 @@
       Camera.prototype.render = function(player, map) {
         this.drawSky(player.direction, map.skybox, map.light);
         this.drawColumns(player, map);
-        this.drawWeapon(player.weapon, player.paces);
+        // this.drawWeapon(player.weapon, player.paces);
       };
 
       Camera.prototype.drawSky = function(direction, sky, ambient) {
